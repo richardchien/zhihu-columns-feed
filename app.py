@@ -6,8 +6,15 @@ from feedgen.feed import FeedGenerator
 
 app = Flask(__name__)
 
-base_url = 'http://zhuanlan.zhihu.com'
-api = base_url + '/api/columns/%s/posts?limit=10'
+
+class Api:
+    base_url = 'http://zhuanlan.zhihu.com'
+    base_api_url = base_url + '/api/columns'
+
+    def __init__(self, column_id):
+        self.column_id = column_id
+        self.info = self.base_api_url + '/%s' % self.column_id
+        self.posts = self.base_api_url + '/%s/posts?limit=10' % self.column_id
 
 
 @app.route('/favicon.ico')
@@ -17,25 +24,29 @@ def favicon():
 
 @app.route('/<string:column_id>', strict_slashes=False)
 def feed(column_id):
-    url = api % column_id
-    with request.urlopen(url) as stream:
+    api = Api(column_id)
+
+    with request.urlopen(api.info) as stream:
         result = stream.read().decode('utf-8')
 
     if not result:
         return '', 404
 
-    entries = json.loads(result)
-    with request.urlopen(base_url + entries[0]['href']) as stream:
-        e = stream.read().decode('utf-8')
-        e = json.loads(e)
-        column_title = e['column']['name']
+    info = json.loads(result)
+
+    with request.urlopen(api.posts) as stream:
+        result = stream.read().decode('utf-8')
+        entries = json.loads(result)
 
     fg = FeedGenerator()
     fg.id(str(entries[0]['slug']))
-    fg.title(column_title)
+    fg.title(info['name'])
     fg.language('zh_CN')
-    fg.author(dict(name=column_title))
-    fg.link(href='/'.join((base_url, column_id)), rel='alternate')
+    fg.icon(info['avatar']['template'].replace('{id}', info['avatar']['id']).replace('{size}', 's'))
+    fg.logo(info['avatar']['template'].replace('{id}', info['avatar']['id']).replace('{size}', 'l'))
+    fg.description(info['intro'])
+    fg.author(dict(name=info['creator']['name']))
+    fg.link(href=api.base_url + info['url'], rel='alternate')
     for entry in entries:
         fe = fg.add_entry()
         fe.id(entry['url'])
@@ -43,12 +54,12 @@ def feed(column_id):
         fe.published(entry['publishedTime'])
         fe.updated(entry['publishedTime'])
         fe.author(dict(name=entry['author']['name']))
-        fe.link(href='/'.join((base_url, entry['url'])), rel='alternate')
+        fe.link(href=api.base_url + entry['url'], rel='alternate')
         fe.content(entry['content'])
 
-    atom_feed = fg.atom_str(pretty=True)
-    return atom_feed
+    rss_feed = fg.rss_str(pretty=True)
+    return rss_feed
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    app.run(host='0.0.0.0', port=8080, debug=True)
