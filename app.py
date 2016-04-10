@@ -57,8 +57,7 @@ def feed(column_id):
         fe.link(href=api.base_url + entry['url'], rel='alternate')
         fe.content(entry['content'])
 
-    rss_feed = fg.rss_str(pretty=True)
-    return rss_feed
+    return fg.atom_str(pretty=True)
 
 
 if __name__ == '__main__':
